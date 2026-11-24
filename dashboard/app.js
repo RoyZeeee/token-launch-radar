@@ -175,16 +175,20 @@ function openDetail(row) {
     stat('Seven-day TVL movement', growth(row.change_7d)),
     stat('Days since first listing', row.age_days ?? 'Unavailable'),
     stat('Peer market cap / TVL', `${row.peer_multiple.toFixed(3)}×`),
-    stat('Growth multiplier', `${row.growth_multiplier}×`),
-    stat('Maturity multiplier', `${row.maturity_multiplier}×`),
+    stat('Growth multiplier', `${row.growth_multiplier.toFixed(3)}×`),
+    stat('Maturity multiplier', `${row.maturity_multiplier.toFixed(3)}×`),
     stat('Implied value', money(row.implied_value_usd)));
+  const recomputedValue = Math.max(1, Math.round(row.tvl_usd * row.peer_multiple * row.growth_multiplier * row.maturity_multiplier));
+  const reconciliation = node('p', recomputedValue === row.implied_value_usd
+    ? 'TVL × peer multiple × growth × maturity reconciles with the ranked value. Factors are rounded for display.'
+    : 'The valuation factors do not reconcile with the ranked value.', 'sub');
   const plan = node('ol', null, 'steps');
   for (const step of row.farm_steps) {
     const cut = step.indexOf(' Cost: ');
     plan.append(group('li', null, node('b', cut < 0 ? step : step.slice(0, cut)), node('div', cut < 0 ? '' : step.slice(cut + 1), 'sub')));
   }
   detail.replaceChildren(top,
-    group('section', 'detail-section', node('h3', 'Valuation breakdown'), equation),
+    group('section', 'detail-section', node('h3', 'Valuation breakdown'), equation, reconciliation),
     group('section', 'detail-section', node('h3', 'Campaign research plan'), plan));
   if (!detail.open) detail.showModal();
 }

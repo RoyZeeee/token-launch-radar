@@ -351,15 +351,14 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     model: {
       base_multiple: s.multiple,
       growth_pct: s.growthPct,
-      growth_multiplier: round4(s.growthMult),
-      maturity_multiplier: round4(s.maturityMult),
+      growth_multiplier: s.growthMult,
+      maturity_multiplier: s.maturityMult,
       age_days: s.age,
     },
     farm_steps: farmSteps(s.p, s.age).map(stepText),
   }));
 }
 
-const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 /** A step as one string: its action, then its cost and time, within the gate's 20..600 characters. */
 export function stepText(step: FarmStep): string {
