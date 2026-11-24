@@ -182,13 +182,19 @@ function openDetail(row) {
   const reconciliation = node('p', recomputedValue === row.implied_value_usd
     ? 'TVL × peer multiple × growth × maturity reconciles with the ranked value. Factors are rounded for display.'
     : 'The valuation factors do not reconcile with the ranked value.', 'sub');
+  const support = row.category_peers
+    ? `${row.category_peers} category comparable${row.category_peers === 1 ? "" : "s"}, pooled toward the ${row.total_peers}-asset global fit.`
+    : row.total_peers
+      ? `No category comparables. This multiple uses the ${row.total_peers}-asset global fit.`
+      : 'No traded comparables available. This estimate uses the fallback multiple.';
+  const peerEvidence = node('p', support, 'sub');
   const plan = node('ol', null, 'steps');
   for (const step of row.farm_steps) {
     const cut = step.indexOf(' Cost: ');
     plan.append(group('li', null, node('b', cut < 0 ? step : step.slice(0, cut)), node('div', cut < 0 ? '' : step.slice(cut + 1), 'sub')));
   }
   detail.replaceChildren(top,
-    group('section', 'detail-section', node('h3', 'Valuation breakdown'), equation, reconciliation),
+    group('section', 'detail-section', node('h3', 'Valuation breakdown'), equation, peerEvidence, reconciliation),
     group('section', 'detail-section', node('h3', 'Campaign research plan'), plan));
   if (!detail.open) detail.showModal();
 }

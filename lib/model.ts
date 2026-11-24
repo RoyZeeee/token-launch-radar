@@ -89,6 +89,8 @@ export interface BoardRow {
   implied_value_usd: number;
   model: {
     base_multiple: number;
+    category_peers: number;
+    total_peers: number;
     growth_pct: number;
     growth_multiplier: number;
     maturity_multiplier: number;
@@ -113,6 +115,8 @@ export interface RadarRow {
   growth_multiplier: number;
   maturity_multiplier: number;
   peer_multiple: number;
+  category_peers: number;
+  total_peers: number;
   farm_steps: string[];
 }
 
@@ -222,7 +226,7 @@ function sizeFeature(protocol: SnapshotProtocol): number {
 }
 
 function peerMultiples(peers: SnapshotProtocol[], fallback: number) {
-  if (!peers.length) return (_protocol: SnapshotProtocol) => fallback;
+  if (!peers.length) return (_protocol: SnapshotProtocol) => ({ multiple: fallback, categoryCount: 0 });
   const observations = peers.map(protocol => ({
     protocol,
     x: sizeFeature(protocol),
@@ -253,8 +257,9 @@ function peerMultiples(peers: SnapshotProtocol[], fallback: number) {
     category, (group.length * median(group) + 8 * global) / (group.length + 8),
   ]));
   return (protocol: SnapshotProtocol) => {
-    const center = centers.get(protocol.category ?? '') ?? global;
-    return Math.exp(center + slope * sizeFeature(protocol));
+    const category = protocol.category ?? '';
+    const center = centers.get(category) ?? global;
+    return { multiple: Math.exp(center + slope * sizeFeature(protocol)), categoryCount: groups.get(category)?.length ?? 0 };
   };
 }
 
@@ -294,7 +299,7 @@ function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidatio
   const peerErrors = [];
   const flatErrors = [];
   for (const protocol of test) {
-    const peerModel = { ...model, base_multiple: trainedMultiple(protocol) };
+    const peerModel = { ...model, base_multiple: trainedMultiple(protocol).multiple };
     const estimate = impliedValue(protocol, snapshot.as_of, peerModel).implied;
     peerErrors.push(error(protocol.mcap_usd!, estimate));
     flatErrors.push(error(protocol.mcap_usd!, protocol.tvl_usd * flatMultiple));
@@ -326,11 +331,12 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     .slice(0, EARLY_ROWS);
   for (const p of early) chosen.set(p.slug, p);
 
-  const multipleFor = peerMultiples(tradedPeers(snapshot), model.base_multiple);
+  const peers = tradedPeers(snapshot);
+  const multipleFor = peerMultiples(peers, model.base_multiple);
   const scored = [...chosen.values()].map((p) => {
-    const multiple = multipleFor(p);
+    const { multiple, categoryCount } = multipleFor(p);
     const { implied, growthPct, growthMult, maturityMult, age } = impliedValue(p, snapshot.as_of, { ...model, base_multiple: multiple });
-    return { p, implied, growthPct, growthMult, maturityMult, age, multiple };
+    return { p, implied, growthPct, growthMult, maturityMult, age, multiple, categoryCount };
   });
   scored.sort((a, b) => b.implied - a.implied || (a.p.slug < b.p.slug ? -1 : a.p.slug > b.p.slug ? 1 : 0));
   return scored.map((s, i) => ({
@@ -350,6 +356,8 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     implied_value_usd: s.implied,
     model: {
       base_multiple: s.multiple,
+      category_peers: s.categoryCount,
+      total_peers: peers.length,
       growth_pct: s.growthPct,
       growth_multiplier: s.growthMult,
       maturity_multiplier: s.maturityMult,
@@ -481,6 +489,8 @@ export function radarRow(row: BoardRow): RadarRow {
     age_days: row.age_days,
     implied_value_usd: row.implied_value_usd,
     peer_multiple: row.model.base_multiple,
+    category_peers: row.model.category_peers,
+    total_peers: row.model.total_peers,
     farm_steps: row.farm_steps,
     growth_multiplier: row.model.growth_multiplier,
     maturity_multiplier: row.model.maturity_multiplier,
