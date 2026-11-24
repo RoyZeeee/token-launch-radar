@@ -157,3 +157,11 @@ tbody tr[data-selected="true"] { background: color-mix(in srgb, var(--accent) 8%
 .controls { border-top: 0; }
 thead { background: #e5eee8; }
 tbody tr:nth-child(even) { background: #f8faf6; }
+
+.protocol-link { font-weight: 700; }
+button.protocol-link { background: transparent; border: 0; padding: 0; color: var(--accent); text-align: left; }
+button.protocol-link:hover { text-decoration: underline; }
+.protocol-cell .sub { display: block; margin-top: 2px; }
+caption { text-align: left; padding: 8px 14px; }
+.model summary { color: var(--accent); cursor: pointer; font-weight: 700; }
+.model p { margin-top: 10px; }
