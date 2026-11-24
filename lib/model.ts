@@ -135,6 +135,7 @@ export interface RadarData {
   floor_usd: number;
   model: ModelConstants;
   model_version: string;
+  validation: PeerValidation;
   watchlist_size: number;
   board_size: number;
   early_size: number;
@@ -232,6 +233,52 @@ function peerMultiples(protocols: SnapshotProtocol[], fallback: number) {
     const group = groups.get(category);
     if (!group?.length || category === null) return global;
     return (group.length * median(group) + 8 * global) / (group.length + 8);
+  };
+}
+
+interface PeerValidation {
+  train: number;
+  test: number;
+  split_date: string | null;
+  peer_error: number | null;
+  flat_error: number | null;
+}
+
+function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidation {
+  // A traded ticker can have multiple protocol rows. Keep one representative per
+  // asset so an older sibling cannot leak the same market cap into the holdout.
+  const assets = new Map<string, SnapshotProtocol>();
+  for (const protocol of snapshot.protocols) {
+    const asset = protocol.gecko_id ?? protocol.symbol?.toUpperCase();
+    if (!asset || !protocol.listed_at || !protocol.mcap_usd || protocol.tvl_usd <= 0 || protocol.category === 'CEX') continue;
+    const current = assets.get(asset);
+    if (!current || protocol.tvl_usd > current.tvl_usd) assets.set(asset, protocol);
+  }
+  const peers = [...assets.values()].sort((a, b) => a.listed_at!.localeCompare(b.listed_at!) || a.slug.localeCompare(b.slug));
+  const split = peers[Math.floor(peers.length * 0.7)]?.listed_at ?? null;
+  if (!split) return { train: 0, test: 0, split_date: null, peer_error: null, flat_error: null };
+  const train = peers.filter(protocol => protocol.listed_at! < split);
+  const test = peers.slice(train.length);
+  if (!train.length || !test.length) {
+    return { train: train.length, test: test.length, split_date: split, peer_error: null, flat_error: null };
+  }
+  const trainedMultiple = peerMultiples(train, model.base_multiple);
+  const flatMultiple = median(train.map(protocol => protocol.mcap_usd! / protocol.tvl_usd));
+  const error = (actual: number, estimate: number) => Math.abs(Math.log(estimate / actual));
+  const peerErrors = [];
+  const flatErrors = [];
+  for (const protocol of test) {
+    const peerModel = { ...model, base_multiple: trainedMultiple(protocol.category) };
+    const estimate = impliedValue(protocol, snapshot.as_of, peerModel).implied;
+    peerErrors.push(error(protocol.mcap_usd!, estimate));
+    flatErrors.push(error(protocol.mcap_usd!, protocol.tvl_usd * flatMultiple));
+  }
+  return {
+    train: train.length,
+    test: test.length,
+    split_date: split,
+    peer_error: Math.exp(median(peerErrors)),
+    flat_error: Math.exp(median(flatErrors)),
   };
 }
 
@@ -426,6 +473,7 @@ export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): {
     floor_usd: snapshot.floor_usd,
     model,
     model_version: MODEL_VERSION,
+    validation: validatePeers(snapshot, model),
     watchlist_size: snapshot.watchlist.length,
     board_size: board.length,
     early_size: early,

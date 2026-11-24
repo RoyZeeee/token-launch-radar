@@ -195,6 +195,14 @@ const methodology = group('details', 'panel model',
   node('p', 'Observed market-cap-to-TVL ratios come from the frozen snapshot. The median for each category is averaged with the global median using eight observations of weight for the global estimate.', 'sub'),
   node('p', `Implied value = TVL × peer multiple × growth factor × maturity factor. Seven-day TVL movement is clipped between ${model.growth_floor}% and ${model.growth_cap}%; missing movement uses 0%. Missing listing age uses ${model.unknown_age_days} days.`, 'sub'),
   node('p', 'Snapshot fields cannot confirm a future launch, a current campaign, or eligibility. The listed capital amounts are illustrative ceilings and transaction fees come from live wallet quotes.', 'sub'));
+const validation = data.validation;
+if (validation.peer_error !== null) {
+  const baseline = validation.flat_error.toFixed(2);
+  const peer = validation.peer_error.toFixed(2);
+  methodology.append(node('p',
+    `Held-out valuation check: ${peer}× median error versus ${baseline}× for a flat multiple. Fit on ${validation.train} older listed assets and evaluated on ${validation.test} assets listed from ${validation.split_date}; one observation per asset. All values come from the same snapshot, so this is a cross-sectional test and does not measure launch-day prices.`,
+    'sub'));
+}
 const masthead = group('header', 'top',
   group('div', 'brand', node('span', null, 'mark'), node('span', 'Token Radar', 'brand-name')),
   group('div', 'top-meta', node('span', `DefiLlama snapshot · ${data.as_of}`)));
@@ -205,7 +213,7 @@ const intro = group('section', 'lede',
     stat('Official watchlist covered', `${data.watchlist_size} / ${data.watchlist_size}`),
     stat('Protocols ranked', data.board_size),
     stat('Earlier-stage protocols', data.early_size),
-    stat('Market comparables shown', data.live_size)));
+    stat('Median error on held-out peers', validation.peer_error === null ? 'Unavailable' : `${validation.peer_error.toFixed(2)}×`)));
 const controls = group('section', 'controls', field('Search', search), field('Category', category), group('div', 'tabs', radarTab, liveTab), count);
 
 root.replaceChildren(group('div', 'shell', masthead, intro, controls, results, methodology), detail);
