@@ -6,10 +6,9 @@
 // snapshot's live-token protocols are kept apart and shown as the market's own values, never mixed into
 // the ranked board.
 //
-// The category multiple uses observed market cap / TVL for live-token peers.
-// A median limits the impact of outliers, then eight global observations' worth
-// of shrinkage keeps small peer groups from determining the estimate.
- 
+// Fit the size effect on traded peers' log market-cap-to-TVL ratios.
+// Combine category and global medians after accounting for that effect.
+
 /** The snapshot's protocol entry: exactly the ten fields the sealed input carries. */
 export interface SnapshotProtocol {
   slug: string;
@@ -57,7 +56,7 @@ export const MODEL: ModelConstants = {
 };
 
 /** The model's version label: the dashboard names it and the rules quote it. */
-export const MODEL_VERSION = 'peer-median-1';
+export const MODEL_VERSION = 'size-calibrated-peers-2';
 
 /** How many pre-token protocols below the watchlist floor the early radar carries, by TVL. */
 export const EARLY_ROWS = 160;
@@ -217,22 +216,44 @@ function median(values: number[]): number {
   return (sorted[middle] + sorted[Math.floor((sorted.length - 1) / 2)]) / 2;
 }
 
-function peerMultiples(protocols: SnapshotProtocol[], fallback: number) {
-  const groups = new Map<string | null, number[]>();
-  const all: number[] = [];
-  for (const protocol of protocols) {
-    if (isPreToken(protocol) || !protocol.mcap_usd || protocol.tvl_usd <= 0 || protocol.category === 'CEX') continue;
-    const ratio = protocol.mcap_usd / protocol.tvl_usd;
-    all.push(ratio);
-    const group = groups.get(protocol.category) ?? [];
-    group.push(ratio);
-    groups.set(protocol.category, group);
+function sizeFeature(protocol: SnapshotProtocol): number {
+  return Math.log(protocol.tvl_usd / 100_000_000);
+}
+
+function peerMultiples(peers: SnapshotProtocol[], fallback: number) {
+  if (!peers.length) return (_protocol: SnapshotProtocol) => fallback;
+  const observations = peers.map(protocol => ({
+    protocol,
+    x: sizeFeature(protocol),
+    y: Math.log(protocol.mcap_usd! / protocol.tvl_usd),
+  }));
+  const meanX = observations.reduce((sum, item) => sum + item.x, 0) / observations.length;
+  const meanY = observations.reduce((sum, item) => sum + item.y, 0) / observations.length;
+  let covariance = 0;
+  let variance = 8;
+  for (const { x, y } of observations) {
+    covariance += (x - meanX) * (y - meanY);
+    variance += (x - meanX) ** 2;
   }
-  const global = all.length ? median(all) : fallback;
-  return (category: string | null) => {
-    const group = groups.get(category);
-    if (!group?.length || category === null) return global;
-    return (group.length * median(group) + 8 * global) / (group.length + 8);
+
+  const slope = covariance / variance;
+  const groups = new Map<string, number[]>();
+  const residuals = observations.map(({ protocol, x, y }) => {
+    const residual = y - slope * x;
+    if (protocol.category) {
+      const group = groups.get(protocol.category) ?? [];
+      group.push(residual);
+      groups.set(protocol.category, group);
+    }
+    return residual;
+  });
+  const global = median(residuals);
+  const centers = new Map([...groups].map(([category, group]) => [
+    category, (group.length * median(group) + 8 * global) / (group.length + 8),
+  ]));
+  return (protocol: SnapshotProtocol) => {
+    const center = centers.get(protocol.category ?? '') ?? global;
+    return Math.exp(center + slope * sizeFeature(protocol));
   };
 }
 
@@ -244,7 +265,7 @@ interface PeerValidation {
   flat_error: number | null;
 }
 
-function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidation {
+function tradedPeers(snapshot: Snapshot): SnapshotProtocol[] {
   // A traded ticker can have multiple protocol rows. Keep one representative per
   // asset so an older sibling cannot leak the same market cap into the holdout.
   const assets = new Map<string, SnapshotProtocol>();
@@ -254,7 +275,11 @@ function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidatio
     const current = assets.get(asset);
     if (!current || protocol.tvl_usd > current.tvl_usd) assets.set(asset, protocol);
   }
-  const peers = [...assets.values()].sort((a, b) => a.listed_at!.localeCompare(b.listed_at!) || a.slug.localeCompare(b.slug));
+  return [...assets.values()].sort((a, b) => a.listed_at!.localeCompare(b.listed_at!) || a.slug.localeCompare(b.slug));
+}
+
+function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidation {
+  const peers = tradedPeers(snapshot);
   const split = peers[Math.floor(peers.length * 0.7)]?.listed_at ?? null;
   if (!split) return { train: 0, test: 0, split_date: null, peer_error: null, flat_error: null };
   const train = peers.filter(protocol => protocol.listed_at! < split);
@@ -268,7 +293,7 @@ function validatePeers(snapshot: Snapshot, model: ModelConstants): PeerValidatio
   const peerErrors = [];
   const flatErrors = [];
   for (const protocol of test) {
-    const peerModel = { ...model, base_multiple: trainedMultiple(protocol.category) };
+    const peerModel = { ...model, base_multiple: trainedMultiple(protocol) };
     const estimate = impliedValue(protocol, snapshot.as_of, peerModel).implied;
     peerErrors.push(error(protocol.mcap_usd!, estimate));
     flatErrors.push(error(protocol.mcap_usd!, protocol.tvl_usd * flatMultiple));
@@ -300,9 +325,9 @@ export function buildBoard(snapshot: Snapshot, model: ModelConstants = MODEL): B
     .slice(0, EARLY_ROWS);
   for (const p of early) chosen.set(p.slug, p);
 
-  const multipleFor = peerMultiples(snapshot.protocols, model.base_multiple);
+  const multipleFor = peerMultiples(tradedPeers(snapshot), model.base_multiple);
   const scored = [...chosen.values()].map((p) => {
-    const multiple = multipleFor(p.category);
+    const multiple = multipleFor(p);
     const { implied, growthPct, growthMult, maturityMult, age } = impliedValue(p, snapshot.as_of, { ...model, base_multiple: multiple });
     return { p, implied, growthPct, growthMult, maturityMult, age, multiple };
   });

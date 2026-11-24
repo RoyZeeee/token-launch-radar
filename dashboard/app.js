@@ -192,7 +192,7 @@ function openDetail(row) {
 const model = data.model;
 const methodology = group('details', 'panel model',
   node('summary', 'How the estimates are built'),
-  node('p', 'Observed market-cap-to-TVL ratios come from the frozen snapshot. The median for each category is averaged with the global median using eight observations of weight for the global estimate.', 'sub'),
+  node('p', 'The peer model fits how market-cap-to-TVL ratios vary with protocol size. It estimates a category adjustment in log space, blending its median with the global median using eight observations of weight for the global estimate.', 'sub'),
   node('p', `Implied value = TVL × peer multiple × growth factor × maturity factor. Seven-day TVL movement is clipped between ${model.growth_floor}% and ${model.growth_cap}%; missing movement uses 0%. Missing listing age uses ${model.unknown_age_days} days.`, 'sub'),
   node('p', 'Snapshot fields cannot confirm a future launch, a current campaign, or eligibility. The listed capital amounts are illustrative ceilings and transaction fees come from live wallet quotes.', 'sub'));
 const validation = data.validation;
