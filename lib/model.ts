@@ -135,6 +135,7 @@ export interface RadarData {
   model: ModelConstants;
   model_version: string;
   validation: PeerValidation;
+  coverage: Coverage;
   watchlist_size: number;
   board_size: number;
   early_size: number;
@@ -487,6 +488,26 @@ export function radarRow(row: BoardRow): RadarRow {
   };
 }
 
+interface Coverage {
+  total: number;
+  ranked: number;
+  tokenRecorded: number;
+  excludedProducts: number;
+  outsideBoard: number;
+}
+
+function auditCoverage(snapshot: Snapshot, board: BoardRow[]): Coverage {
+  const ranked = new Set(board.map(row => row.slug));
+  const coverage = { total: snapshot.protocols.length, ranked: ranked.size, tokenRecorded: 0, excludedProducts: 0, outsideBoard: 0 };
+  for (const protocol of snapshot.protocols) {
+    if (ranked.has(protocol.slug)) continue;
+    if (!isPreToken(protocol)) coverage.tokenRecorded++;
+    else if (!isRankable(protocol)) coverage.excludedProducts++;
+    else coverage.outsideBoard++;
+  }
+  return coverage;
+}
+
 /** Everything the dashboard renders, from the snapshot. */
 export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): { board: BoardRow[]; radar: RadarData } {
   const board = buildBoard(snapshot, model);
@@ -499,6 +520,7 @@ export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): {
     model,
     model_version: MODEL_VERSION,
     validation: validatePeers(snapshot, model),
+    coverage: auditCoverage(snapshot, board),
     watchlist_size: snapshot.watchlist.length,
     board_size: board.length,
     early_size: early,

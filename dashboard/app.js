@@ -203,6 +203,10 @@ if (validation.peer_error !== null) {
     `Held-out valuation check: ${peer}× median error versus ${baseline}× for a flat multiple. Fit on ${validation.train} older listed assets and evaluated on ${validation.test} assets listed from ${validation.split_date}; one observation per asset. All values come from the same snapshot, so this is a cross-sectional test and does not measure launch-day prices.`,
     'sub'));
 }
+const coverage = data.coverage;
+methodology.append(node('p',
+  `Snapshot audit: ${coverage.ranked} ranked, ${coverage.tokenRecorded} with a token recorded, ${coverage.excludedProducts} excluded by product or version rules, and ${coverage.outsideBoard} other candidates outside the board. Total: ${coverage.total} protocols.`,
+  'sub'));
 const masthead = group('header', 'top',
   group('div', 'brand', node('span', null, 'mark'), node('span', 'Token Radar', 'brand-name')),
   group('div', 'top-meta', node('span', `DefiLlama snapshot · ${data.as_of}`)));
@@ -211,7 +215,7 @@ const intro = group('section', 'lede',
     node('p', 'Compare peer-based valuations and recent liquidity movement, then inspect the evidence and research steps for each protocol.')),
   group('div', 'facts',
     stat('Official watchlist covered', `${data.watchlist_size} / ${data.watchlist_size}`),
-    stat('Protocols ranked', data.board_size),
+    stat('Ranked / snapshot total', `${coverage.ranked} / ${coverage.total}`),
     stat('Earlier-stage protocols', data.early_size),
     stat('Median error on held-out peers', validation.peer_error === null ? 'Unavailable' : `${validation.peer_error.toFixed(2)}×`)));
 const controls = group('section', 'controls', field('Search', search), field('Category', category), group('div', 'tabs', radarTab, liveTab), count);
