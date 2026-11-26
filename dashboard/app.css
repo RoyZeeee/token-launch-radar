@@ -46,6 +46,8 @@ button, select, summary { cursor: pointer; }
 .facts .fact span { color: #d7ebe1; font-size: 13px; }
 .facts .fact b { color: #d9efaa; font: 650 17px ui-monospace, monospace; }
 .controls { display: flex; align-items: end; flex-wrap: wrap; gap: 13px; padding: 13px 0; }
+.watchlist-control { align-self: center; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.watchlist-control input { margin-right: 6px; vertical-align: middle; }
 .field { display: grid; gap: 4px; }
 .field label { color: var(--muted); font-size: 12px; }
 .field input, .field select, .tabs, .close {

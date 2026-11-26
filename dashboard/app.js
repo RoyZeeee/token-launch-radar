@@ -52,6 +52,15 @@ for (const label of ['All categories', ...new Set([...data.rows, ...data.live].m
   category.append(option);
 }
 category.value = params.get('category') || '';
+const watchlist = new Set(data.watchlist);
+const onlyWatchlist = node('input');
+onlyWatchlist.type = 'checkbox';
+onlyWatchlist.checked = params.get('watchlist') === '1';
+onlyWatchlist.addEventListener('change', () => {
+  remember('watchlist', onlyWatchlist.checked ? '1' : '');
+  renderRows();
+});
+const watchlistControl = group('label', 'watchlist-control', onlyWatchlist, node('span', 'Official watchlist only'));
 const count = node('span', null, 'count');
 count.setAttribute('aria-live', 'polite');
 const results = node('section', null, 'panel table-wrap');
@@ -86,6 +95,7 @@ category.addEventListener('change', () => {
 function selectedRows() {
   const query = search.value.trim().toLowerCase();
   return (market.live ? data.live : data.rows)
+    .filter(row => market.live || !onlyWatchlist.checked || watchlist.has(row.slug))
     .filter(row => !category.value || categoryOf(row) === category.value)
     .filter(row => [row.name, row.slug, categoryOf(row), ...row.chains].join(' ').toLowerCase().includes(query))
     .sort((a, b) => {
@@ -116,6 +126,7 @@ function renderRows(focusKey) {
   const valueKey = market.live ? 'mcap_usd' : 'implied_value_usd';
   radarTab.setAttribute('aria-pressed', String(!market.live));
   liveTab.setAttribute('aria-pressed', String(market.live));
+  watchlistControl.hidden = market.live;
   count.textContent = `${rows.length} of ${market.live ? data.live_size : data.board_size} protocols`;
   if (rows.length === 0) {
     results.replaceChildren(group('div', 'model', node('p', 'No protocols match these filters.'), button('Clear filters', () => {
@@ -123,6 +134,10 @@ function renderRows(focusKey) {
       category.value = '';
       remember('q', '');
       remember('category', '');
+      if (!market.live) {
+        onlyWatchlist.checked = false;
+        remember('watchlist', '');
+      }
       renderRows();
       search.focus();
     })));
@@ -228,7 +243,7 @@ const intro = group('section', 'lede',
     stat('Ranked / snapshot total', `${coverage.ranked} / ${coverage.total}`),
     stat('Earlier-stage protocols', data.early_size),
     stat('Median error on held-out peers', validation.peer_error === null ? 'Unavailable' : `${validation.peer_error.toFixed(2)}×`)));
-const controls = group('section', 'controls', field('Search', search), field('Category', category), group('div', 'tabs', radarTab, liveTab), count);
+const controls = group('section', 'controls', field('Search', search), field('Category', category), group('div', 'tabs', radarTab, liveTab), watchlistControl, count);
 
 root.replaceChildren(group('div', 'shell', masthead, intro, controls, results, methodology), detail);
 root.setAttribute('aria-busy', 'false');

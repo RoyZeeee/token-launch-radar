@@ -141,6 +141,7 @@ export interface RadarData {
   validation: PeerValidation;
   coverage: Coverage;
   watchlist_size: number;
+  watchlist: string[];
   board_size: number;
   early_size: number;
   live_size: number;
@@ -531,6 +532,7 @@ export function buildRadar(snapshot: Snapshot, model: ModelConstants = MODEL): {
     validation: validatePeers(snapshot, model),
     coverage: auditCoverage(snapshot, board),
     watchlist_size: snapshot.watchlist.length,
+    watchlist: snapshot.watchlist,
     board_size: board.length,
     early_size: early,
     live_size: live.length,
